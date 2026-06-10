@@ -86,4 +86,16 @@ export default defineSchema({
   })
     .index("by_student", ["studentId"])
     .index("by_school", ["schoolId"]),
+
+    sessions: defineTable({
+    schoolId: v.id("schools"),
+    userId: v.id("users"),
+    role: v.union(v.literal("admin"), v.literal("prefect")),
+    tokenHash: v.string(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_user", ["userId"]),
 });
