@@ -152,3 +152,32 @@ export const getByQrToken = query({
     return student ?? null;
   },
 });
+
+export const getWithQR = query({
+  args: { tokenHash: v.string() },
+  handler: async (ctx, args) => {
+    const auth = await requireSession(ctx, args.tokenHash);
+    requireRole(auth, ["admin"]);
+
+    const students = await ctx.db
+      .query("students")
+      .withIndex("by_school", (q) => q.eq("schoolId", auth.schoolId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .collect();
+
+    const result = [];
+    for (const s of students) {
+      const qr = await ctx.db
+        .query("qrTokens")
+        .withIndex("by_student_status", (q) =>
+          q.eq("studentId", s._id).eq("status", "active")
+        )
+        .first();
+      result.push({
+        ...s,
+        qrToken: qr?.tokenHash ?? null,
+      });
+    }
+    return result;
+  },
+});

@@ -14,7 +14,7 @@ from app.core.config import AZUL_MARINO, DORADO, ROJO
 
 
 class StudentsView:
-    def __init__(self, page: ft.Page, state):
+    def __init__(self, page: ft.Page, state, file_picker=None):
         self.page = page
         self.state = state
         self.token_hash = hashlib.sha256(
@@ -24,11 +24,7 @@ class StudentsView:
 
     def build(self):
         self.foto_path = None
-
-        # ── Lista de alumnos ──────────────────────────────────────────────
         self.lista = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
-
-        # ── Campos del formulario ─────────────────────────────────────────
         self.campo_nombre = ft.TextField(label="Nombre completo", width=320)
         self.campo_codigo = ft.TextField(label="Código de alumno", width=320)
         self.campo_grado = ft.Dropdown(
@@ -48,13 +44,12 @@ class StudentsView:
             ],
         )
         self.foto_preview = ft.Image(
-            src="", width=80, height=80,
+            src="assets/logo.png", width=80, height=80,
             fit="cover", visible=False,
         )
         self.foto_label = ft.Text("Sin foto seleccionada", size=12)
         self.error_form = ft.Text("", color=ROJO, size=12)
 
-        # ── Panel formulario (oculto al inicio) ───────────────────────────
         self.panel_form = ft.Container(
             visible=False,
             bgcolor=ft.Colors.WHITE,
@@ -70,12 +65,8 @@ class StudentsView:
                 tight=True,
                 spacing=10,
                 controls=[
-                    ft.Text(
-                        "Agregar alumno",
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color=AZUL_MARINO,
-                    ),
+                    ft.Text("Agregar alumno", size=16,
+                            weight=ft.FontWeight.BOLD, color=AZUL_MARINO),
                     self.campo_nombre,
                     self.campo_codigo,
                     self.campo_grado,
@@ -83,26 +74,24 @@ class StudentsView:
                     ft.Divider(),
                     self.foto_preview,
                     self.foto_label,
-                    ft.Row(
-                        controls=[
-                            ft.ElevatedButton(
-                                "Subir foto",
-                                icon=ft.Icons.UPLOAD_FILE,
-                                on_click=lambda e: threading.Thread(
-                                    target=self._abrir_explorador,
-                                    daemon=True,
-                                ).start(),
-                            ),
-                            ft.ElevatedButton(
-                                "Usar cámara",
-                                icon=ft.Icons.CAMERA_ALT,
-                                on_click=lambda e: threading.Thread(
-                                    target=self._capturar_camara,
-                                    daemon=True,
-                                ).start(),
-                            ),
-                        ]
-                    ),
+                    ft.Row(controls=[
+                        ft.ElevatedButton(
+                            "Subir foto",
+                            icon=ft.Icons.UPLOAD_FILE,
+                            on_click=lambda e: threading.Thread(
+                                target=self._abrir_explorador,
+                                daemon=True,
+                            ).start(),
+                        ),
+                        ft.ElevatedButton(
+                            "Usar cámara",
+                            icon=ft.Icons.CAMERA_ALT,
+                            on_click=lambda e: threading.Thread(
+                                target=self._capturar_camara,
+                                daemon=True,
+                            ).start(),
+                        ),
+                    ]),
                     self.error_form,
                     ft.Row(
                         spacing=10,
@@ -127,7 +116,6 @@ class StudentsView:
             ),
         )
 
-        # ── Panel de confirmación de eliminar (oculto al inicio) ──────────
         self.confirm_nombre = ft.Text("")
         self._alumno_a_eliminar = None
         self.panel_confirm = ft.Container(
@@ -145,18 +133,11 @@ class StudentsView:
                 tight=True,
                 spacing=10,
                 controls=[
-                    ft.Text(
-                        "Eliminar alumno",
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color=ROJO,
-                    ),
+                    ft.Text("Eliminar alumno", size=16,
+                            weight=ft.FontWeight.BOLD, color=ROJO),
                     self.confirm_nombre,
-                    ft.Text(
-                        "Esta acción no se puede deshacer.",
-                        color=ft.Colors.GREY_600,
-                        size=12,
-                    ),
+                    ft.Text("Esta acción no se puede deshacer.",
+                            color=ft.Colors.GREY_600, size=12),
                     ft.Row(
                         spacing=10,
                         controls=[
@@ -188,12 +169,8 @@ class StudentsView:
                 ft.Row(
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     controls=[
-                        ft.Text(
-                            "Gestión de Alumnos",
-                            size=20,
-                            weight=ft.FontWeight.BOLD,
-                            color=AZUL_MARINO,
-                        ),
+                        ft.Text("Gestión de Alumnos", size=20,
+                                weight=ft.FontWeight.BOLD, color=AZUL_MARINO),
                         ft.ElevatedButton(
                             "Agregar alumno",
                             icon=ft.Icons.ADD,
@@ -212,15 +189,13 @@ class StudentsView:
             ],
         )
 
-    # ── Formulario ────────────────────────────────────────────────────────────
-
     def _mostrar_formulario(self):
         self.foto_path = None
         self.campo_nombre.value = ""
         self.campo_codigo.value = ""
         self.campo_grado.value = None
         self.campo_grupo.value = None
-        self.foto_preview.src = ""
+        self.foto_preview.src = "assets/logo.png"
         self.foto_preview.visible = False
         self.foto_label.value = "Sin foto seleccionada"
         self.error_form.value = ""
@@ -249,34 +224,24 @@ class StudentsView:
             return
 
         try:
-            student_id = convex_mutation(
-                "students:create",
-                {
-                    "tokenHash": self.token_hash,
-                    "studentCode": self.campo_codigo.value.strip(),
-                    "name": self.campo_nombre.value.strip(),
-                    "grade": self.campo_grado.value,
-                    "group": self.campo_grupo.value,
-                }
-            )
-
+            student_id = convex_mutation("students:create", {
+                "tokenHash": self.token_hash,
+                "studentCode": self.campo_codigo.value.strip(),
+                "name": self.campo_nombre.value.strip(),
+                "grade": self.campo_grado.value,
+                "group": self.campo_grupo.value,
+            })
             if self.foto_path and student_id:
                 self.subir_foto(student_id)
-
             self._ocultar_formulario()
             self.cargar_alumnos()
-
         except Exception as ex:
             self.error_form.value = str(ex)
             self.page.update()
 
-    # ── Confirmación eliminar ─────────────────────────────────────────────────
-
     def _mostrar_confirm(self, alumno):
         self._alumno_a_eliminar = alumno
-        self.confirm_nombre.value = (
-            f"¿Estás seguro de eliminar a {alumno['name']}?"
-        )
+        self.confirm_nombre.value = f"¿Estás seguro de eliminar a {alumno['name']}?"
         self.panel_form.visible = False
         self.panel_confirm.visible = True
         self.page.update()
@@ -290,48 +255,31 @@ class StudentsView:
         if not self._alumno_a_eliminar:
             return
         try:
-            convex_mutation(
-                "students:deleteStudent",
-                {
-                    "tokenHash": self.token_hash,
-                    "studentId": self._alumno_a_eliminar["_id"],
-                }
-            )
+            convex_mutation("students:deleteStudent", {
+                "tokenHash": self.token_hash,
+                "studentId": self._alumno_a_eliminar["_id"],
+            })
             self._ocultar_confirm()
             self.cargar_alumnos()
         except Exception as ex:
             print(f"Error eliminando: {ex}")
 
-    # ── Lista ─────────────────────────────────────────────────────────────────
-
     def cargar_alumnos(self):
         self.lista.controls.clear()
-
         try:
-            alumnos = convex_query(
-                "students:listBySchool",
-                {"tokenHash": self.token_hash}
-            )
-
+            alumnos = convex_query("students:listBySchool", {
+                "tokenHash": self.token_hash
+            })
             if not alumnos:
                 self.lista.controls.append(
-                    ft.Text(
-                        "No hay alumnos registrados.",
-                        color=ft.Colors.GREY_500,
-                        italic=True,
-                    )
+                    ft.Text("No hay alumnos registrados.",
+                            color=ft.Colors.GREY_500, italic=True)
                 )
             else:
                 for alumno in alumnos:
-                    self.lista.controls.append(
-                        self._tarjeta_alumno(alumno)
-                    )
-
+                    self.lista.controls.append(self._tarjeta_alumno(alumno))
         except Exception as ex:
-            self.lista.controls.append(
-                ft.Text(f"Error: {ex}", color=ROJO)
-            )
-
+            self.lista.controls.append(ft.Text(f"Error: {ex}", color=ROJO))
         self.page.update()
 
     def _tarjeta_alumno(self, alumno):
@@ -342,9 +290,7 @@ class StudentsView:
                 fit="cover", border_radius=25,
             )
         else:
-            foto_widget = ft.Icon(
-                ft.Icons.PERSON, color=AZUL_MARINO, size=40
-            )
+            foto_widget = ft.Icon(ft.Icons.PERSON, color=AZUL_MARINO, size=40)
 
         return ft.Container(
             border=ft.Border(
@@ -363,63 +309,49 @@ class StudentsView:
                         expand=True,
                         spacing=2,
                         controls=[
+                            ft.Text(alumno["name"], weight=ft.FontWeight.BOLD),
                             ft.Text(
-                                alumno["name"],
-                                weight=ft.FontWeight.BOLD
-                            ),
-                            ft.Text(
-                                f"Grado {alumno['grade']}° "
-                                f"Grupo {alumno['group']} "
-                                f"— Código: {alumno['studentCode']}",
-                                size=12,
-                                color=ft.Colors.GREY_600,
+                                f"Grado {alumno['grade']}° Grupo {alumno['group']} — Código: {alumno['studentCode']}",
+                                size=12, color=ft.Colors.GREY_600,
                             ),
                         ],
                     ),
-                    # ── NUEVO: Botón Ver QR ───────────────────────────────
                     ft.IconButton(
                         icon=ft.Icons.QR_CODE,
                         icon_color=AZUL_MARINO,
                         tooltip="Ver código QR",
-                        on_click=lambda e, a=alumno:
-                            self._mostrar_qr(a),
+                        on_click=lambda e, a=alumno: self._mostrar_qr(a),
                     ),
-                    # ─────────────────────────────────────────────────────
                     ft.IconButton(
                         icon=ft.Icons.DELETE_OUTLINE,
                         icon_color=ROJO,
                         tooltip="Eliminar alumno",
-                        on_click=lambda e, a=alumno:
-                            self._mostrar_confirm(a),
+                        on_click=lambda e, a=alumno: self._mostrar_confirm(a),
                     ),
                 ],
             ),
         )
 
-    # ── VER QR (NUEVO) ────────────────────────────────────────────────────────
-
     def _mostrar_qr(self, alumno):
-        """Consulta el tokenHash del alumno, genera el QR y lo muestra en un diálogo."""
         try:
-            qr_token = convex_query(
-                "students:getQrToken",
-                {
-                    "tokenHash": self.token_hash,
-                    "studentId": alumno["_id"],
-                }
-            )
+            alumnos_qr = convex_query("students:getWithQR", {
+                "tokenHash": self.token_hash,
+            })
+            qr_token = None
+            for a in alumnos_qr:
+                if a["_id"] == alumno["_id"]:
+                    qr_token = a.get("qrToken")
+                    break
 
             if not qr_token:
                 self._dialogo_error("Este alumno no tiene QR activo.")
                 return
 
-            # Generar imagen QR en memoria
             qr_img = qrcode.make(qr_token)
             buf = io.BytesIO()
             qr_img.save(buf, format="PNG")
             buf.seek(0)
 
-            # Guardar temporalmente para mostrarlo con ft.Image
             os.makedirs("assets/qr", exist_ok=True)
             qr_path = f"assets/qr/qr_{alumno['_id']}.png"
             with open(qr_path, "wb") as f:
@@ -427,41 +359,33 @@ class StudentsView:
 
             dlg = ft.AlertDialog(
                 modal=True,
-                title=ft.Text(
-                    f"QR de {alumno['name']}",
-                    weight=ft.FontWeight.BOLD,
-                    color=AZUL_MARINO,
-                ),
+                title=ft.Text(f"QR de {alumno['name']}",
+                              weight=ft.FontWeight.BOLD, color=AZUL_MARINO),
                 content=ft.Column(
                     tight=True,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
-                        ft.Image(
-                            src=qr_path,
-                            width=250,
-                            height=250,
-                            fit="contain",
-                        ),
-                        ft.Text(
-                            f"Código: {alumno['studentCode']}",
-                            size=12,
-                            color=ft.Colors.GREY_600,
-                        ),
-                        ft.Text(
-                            f"Grado {alumno['grade']}° Grupo {alumno['group']}",
-                            size=12,
-                            color=ft.Colors.GREY_600,
-                        ),
+                        ft.Image(src=qr_path, width=250, height=250, fit="contain"),
+                        ft.Text(f"Código: {alumno['studentCode']}",
+                                size=12, color=ft.Colors.GREY_600),
+                        ft.Text(f"Grado {alumno['grade']}° Grupo {alumno['group']}",
+                                size=12, color=ft.Colors.GREY_600),
                     ],
                 ),
                 actions=[
-                    ft.TextButton(
-                        "Cerrar",
-                        on_click=lambda e: self._cerrar_dialogo(dlg),
+                    ft.TextButton("Cerrar",
+                        on_click=lambda e: self._cerrar_dialogo(dlg)),
+                    ft.ElevatedButton(
+                        "Imprimir",
+                        icon=ft.Icons.PRINT,
+                        style=ft.ButtonStyle(
+                            bgcolor=AZUL_MARINO,
+                            color=ft.Colors.WHITE,
+                        ),
+                        on_click=lambda e: os.startfile(qr_path, "print"),
                     ),
                 ],
             )
-
             self.page.overlay.append(dlg)
             dlg.open = True
             self.page.update()
@@ -478,17 +402,13 @@ class StudentsView:
             title=ft.Text("Error", color=ROJO),
             content=ft.Text(mensaje),
             actions=[
-                ft.TextButton(
-                    "Cerrar",
-                    on_click=lambda e: self._cerrar_dialogo(dlg),
-                )
+                ft.TextButton("Cerrar",
+                    on_click=lambda e: self._cerrar_dialogo(dlg))
             ],
         )
         self.page.overlay.append(dlg)
         dlg.open = True
         self.page.update()
-
-    # ── Foto: explorador de archivos (tkinter) ────────────────────────────────
 
     def _abrir_explorador(self):
         root = tk.Tk()
@@ -499,7 +419,6 @@ class StudentsView:
             filetypes=[("Imágenes", "*.jpg *.jpeg *.png")],
         )
         root.destroy()
-
         if ruta:
             self.foto_path = ruta
             self.foto_preview.src = ruta
@@ -507,18 +426,16 @@ class StudentsView:
             self.foto_label.value = os.path.basename(ruta)
             self.page.update()
 
-    # ── Foto: cámara ──────────────────────────────────────────────────────────
-
     def _capturar_camara(self):
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             self.foto_label.value = "No se pudo acceder a la cámara"
             self.page.update()
             return
-
+        for _ in range(5):
+            cap.read()
         ret, frame = cap.read()
         cap.release()
-
         if ret:
             os.makedirs("assets/fotos", exist_ok=True)
             ruta = os.path.join("assets", "fotos", "temp_foto.jpg")
@@ -528,29 +445,31 @@ class StudentsView:
             self.foto_preview.visible = True
             self.foto_label.value = "Foto tomada con cámara"
             self.page.update()
-
-    # ── Subir foto a Convex ───────────────────────────────────────────────────
+        else:
+            self.foto_label.value = "No se pudo capturar la foto"
+            self.page.update()
 
     def subir_foto(self, student_id: str):
         try:
-            upload_url = convex_mutation(
-                "students:generateUploadUrl",
-                {"tokenHash": self.token_hash}
-            )
+            upload_url = convex_mutation("students:generateUploadUrl", {
+                "tokenHash": self.token_hash
+            })
             with open(self.foto_path, "rb") as f:
                 foto_bytes = f.read()
-
-            res = requests.post(upload_url, data=foto_bytes, timeout=30)
+            ext = os.path.splitext(self.foto_path)[1].lower()
+            mime = "image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png"
+            res = requests.post(
+                upload_url,
+                headers={"Content-Type": mime},
+                data=foto_bytes,
+                timeout=30,
+            )
             storage_id = res.json().get("storageId")
-
             if storage_id:
-                convex_mutation(
-                    "students:updatePhoto",
-                    {
-                        "tokenHash": self.token_hash,
-                        "studentId": student_id,
-                        "storageId": storage_id,
-                    }
-                )
+                convex_mutation("students:updatePhoto", {
+                    "tokenHash": self.token_hash,
+                    "studentId": student_id,
+                    "storageId": storage_id,
+                })
         except Exception as ex:
             print(f"Error subiendo foto: {ex}")

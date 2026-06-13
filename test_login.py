@@ -1,23 +1,23 @@
-from app.services.auth_service import login, hash_password
-from app.services.convex_service import convex_mutation, convex_query
+import hashlib
+from app.services.convex_service import convex_query
+from app.services.auth_service import login
 
-# Paso 1: Crear usuario admin de prueba
-print("Creando usuario admin...")
-school = convex_query("schools:getByCode", {"code": "VG001"})
-school_id = school["_id"]
-
-password_hash = hash_password("admin123")
-user_id = convex_mutation("users:create", {
-    "schoolId": school_id,
-    "name": "Administrador",
-    "email": "admin@vicente.edu.mx",
-    "passwordHash": password_hash,
-    "role": "admin",
-})
-print(f"Usuario creado: {user_id}")
-
-# Paso 2: Login
+# Login
 print("Haciendo login...")
 token, user = login("admin@vicente.edu.mx", "admin123")
-print(f"Login exitoso. Token: {token[:20]}...")
-print(f"Usuario: {user['name']} - Rol: {user['role']}")
+print(f"Login exitoso: {user['name']}")
+
+# Probar getWithQR
+token_hash = hashlib.sha256(token.encode()).hexdigest()
+alumnos = convex_query("students:getWithQR", {"tokenHash": token_hash})
+print("\nAlumnos con QR:")
+for a in alumnos:
+    print(f"  {a['name']} — QR: {a['qrToken']}")
+
+    from app.services.qr_service import generar_qr
+
+print("\nGenerando QR...")
+for a in alumnos:
+    if a["qrToken"]:
+        ruta = generar_qr(a["qrToken"], a["name"])
+        print(f"  QR generado: {ruta}")
