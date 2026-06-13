@@ -61,3 +61,54 @@ export const getTodaySummary = query({
     };
   },
 });
+
+// ── NUEVO: registrar asistencia escaneando el QR del alumno ──────────────────
+export const registerByQr = mutation({
+  args: {
+    sessionTokenHash: v.string(),
+    qrTokenHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const auth = await requireSession(ctx, args.sessionTokenHash);
+    requireRole(auth, ["admin", "prefect"]);
+
+    // Buscar el QR
+    const qr = await ctx.db
+      .query("qrTokens")
+      .withIndex("by_token_hash", (q) => q.eq("tokenHash", args.qrTokenHash))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .first();
+
+    if (!qr) throw new Error("QR inválido o no encontrado");
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Verificar si ya fue registrado hoy
+    const existing = await ctx.db
+      .query("attendance")
+      .withIndex("by_student_date", (q) =>
+        q.eq("studentId", qr.studentId).eq("attendanceDate", today)
+      )
+      .first();
+
+    if (existing) {
+      const student = await ctx.db.get(qr.studentId);
+      return { alreadyRegistered: true, studentName: student?.name ?? "" };
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("attendance", {
+      schoolId: auth.schoolId,
+      studentId: qr.studentId,
+      scannedByUserId: auth.userId,
+      scannedAt: now,
+      attendanceDate: today,
+      status: "present",
+      notificationStatus: "pending",
+      createdAt: now,
+    });
+
+    const student = await ctx.db.get(qr.studentId);
+    return { alreadyRegistered: false, studentName: student?.name ?? "" };
+  },
+});
