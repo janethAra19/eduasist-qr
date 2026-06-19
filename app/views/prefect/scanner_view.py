@@ -1,9 +1,11 @@
 import flet as ft
 import hashlib
 import threading
+import time
+from datetime import date, datetime
+
 import cv2
 from pyzbar import pyzbar
-import time
 
 from app.services.convex_service import convex_query, convex_mutation
 from app.core.config import AZUL_MARINO, DORADO, ROJO
@@ -18,12 +20,14 @@ class ScannerView:
         ).hexdigest()
         self._scanning = False
         self._scan_thread = None
+        self._cap = None  # guardamos referencia para liberarla limpiamente
+
+    # ── build ─────────────────────────────────────────────────────────────────
 
     def build(self):
-        # ── Estado del escáner ─────────────────────────────────────────────
         self._scanning = False
 
-        # ── Indicador visual de estado ────────────────────────────────────
+        # Indicador visual
         self.estado_icon = ft.Icon(
             ft.Icons.QR_CODE_SCANNER,
             size=80,
@@ -42,7 +46,7 @@ class ScannerView:
             text_align=ft.TextAlign.CENTER,
         )
 
-        # ── Resultado del último escaneo ──────────────────────────────────
+        # Resultado del último escaneo
         self.resultado_card = ft.Container(
             visible=False,
             border_radius=12,
@@ -50,14 +54,13 @@ class ScannerView:
             margin=ft.Margin(left=0, top=10, right=0, bottom=0),
         )
 
-        # ── Historial del día ─────────────────────────────────────────────
+        # Historial del día
         self.historial = ft.Column(
             scroll=ft.ScrollMode.AUTO,
             spacing=4,
         )
-        self._escaneados_hoy = []  # lista local para no recargar todo el tiempo
 
-        # ── Botones ───────────────────────────────────────────────────────
+        # Botones
         self.btn_iniciar = ft.ElevatedButton(
             "Iniciar escáner",
             icon=ft.Icons.PLAY_ARROW,
@@ -83,7 +86,6 @@ class ScannerView:
         return ft.Column(
             expand=True,
             controls=[
-                # Encabezado
                 ft.Text(
                     "Escáner de Asistencia",
                     size=20,
@@ -97,7 +99,7 @@ class ScannerView:
                 ),
                 ft.Divider(),
 
-                # Zona central del escáner
+                # Zona del escáner
                 ft.Container(
                     bgcolor=ft.Colors.GREY_100,
                     border_radius=16,
@@ -120,12 +122,9 @@ class ScannerView:
                     ),
                 ),
 
-                # Resultado del último escaneo
                 self.resultado_card,
-
                 ft.Divider(),
 
-                # Historial del día
                 ft.Text(
                     "Registros de hoy",
                     size=15,
@@ -142,12 +141,15 @@ class ScannerView:
     # ── Control del escáner ───────────────────────────────────────────────────
 
     def _iniciar_escaneo(self, e):
+        if self._scanning:
+            return  # evitar doble click
+
         self._scanning = True
         self.btn_iniciar.visible = False
         self.btn_detener.visible = True
         self.estado_icon.color = DORADO
-        self.estado_texto.value = "Escáner activo — apunta la cámara al QR"
-        self.estado_subtexto.value = "La cámara se abrirá en una ventana separada"
+        self.estado_texto.value = "Escáner activo — apunta al QR del alumno"
+        self.estado_subtexto.value = "Leyendo cámara…"
         self.resultado_card.visible = False
         self.page.update()
 
@@ -157,79 +159,97 @@ class ScannerView:
         )
         self._scan_thread.start()
 
-    def _detener_escaneo(self, e):
-        self._scanning = False
+    def _detener_escaneo(self, e=None):
+        self._scanning = False   # el loop revisa esta bandera cada frame
+        # La cámara se liberará dentro del loop cuando salga
+        self._actualizar_ui_detenido()
+
+    def _actualizar_ui_detenido(self):
         self.btn_iniciar.visible = True
         self.btn_detener.visible = False
         self.estado_icon.color = ft.Colors.GREY_400
         self.estado_texto.value = "Escáner detenido"
         self.estado_subtexto.value = ""
-        self.page.update()
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     # ── Loop de la cámara (hilo separado) ────────────────────────────────────
 
     def _loop_escaneo(self):
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            self.estado_texto.value = "Error: no se pudo abrir la cámara"
-            self.estado_icon.color = ROJO
-            self._scanning = False
-            self.btn_iniciar.visible = True
-            self.btn_detener.visible = False
-            self.page.update()
+        # Intentar abrir la cámara (índice 0 primero, luego 1)
+        self._cap = None
+        for idx in [0, 1]:
+            cap = cv2.VideoCapture(idx)
+            if cap.isOpened():
+                self._cap = cap
+                break
+            cap.release()
+
+        if self._cap is None:
+            self._ui_error_camara("No se encontró ninguna cámara disponible")
             return
+
+        # Reducir resolución para mejorar velocidad en Android/PC
+        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
         ultimo_qr = None
         ultimo_tiempo = 0
-        COOLDOWN = 3  # segundos entre escaneos del mismo QR
+        COOLDOWN = 3  # segundos entre registros del mismo QR
 
         while self._scanning:
-            ret, frame = cap.read()
+            ret, frame = self._cap.read()
             if not ret:
-                break
+                # Si el frame falla, esperar un momento y reintentar
+                time.sleep(0.05)
+                continue
 
-            # Decodificar QR codes en el frame
+            # Decodificar QR en el frame (sin mostrar ventana)
             qrs = pyzbar.decode(frame)
 
             for qr in qrs:
-                datos = qr.data.decode("utf-8").strip()
-                ahora = time.time()
-
-                # Evitar registrar el mismo QR dos veces seguidas rápidamente
-                if datos == ultimo_qr and (ahora - ultimo_tiempo) < COOLDOWN:
+                datos = qr.data.decode("utf-8", errors="ignore").strip()
+                if not datos:
                     continue
+
+                ahora = time.time()
+                if datos == ultimo_qr and (ahora - ultimo_tiempo) < COOLDOWN:
+                    continue  # mismo QR demasiado rápido, ignorar
 
                 ultimo_qr = datos
                 ultimo_tiempo = ahora
 
-                # Dibujar rectángulo en el frame (visual feedback)
-                pts = qr.polygon
-                if len(pts) == 4:
-                    import numpy as np
-                    pts_np = np.array([(p.x, p.y) for p in pts], dtype=np.int32)
-                    cv2.polylines(frame, [pts_np], True, (0, 255, 0), 3)
+                # Dar feedback visual inmediato (antes de la consulta a Convex)
+                self.estado_subtexto.value = "QR detectado, verificando…"
+                try:
+                    self.page.update()
+                except Exception:
+                    pass
 
-                # Procesar en hilo de UI
+                # Procesar en este mismo hilo (Convex es rápido)
                 self._procesar_qr(datos)
 
-            # Mostrar ventana de cámara
-            cv2.imshow("EduAsist QR - Escáner (presiona Q para cerrar)", frame)
+            # Sin cv2.imshow ni waitKey — compatible con Android y escritorio
+            time.sleep(0.05)  # ~20 fps, sin bloquear
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        # Liberar cámara al salir del loop
+        if self._cap:
+            self._cap.release()
+            self._cap = None
 
-        cap.release()
-        cv2.destroyAllWindows()
-
-        # Si el loop terminó por tecla Q, actualizar UI
-        if self._scanning:
-            self._scanning = False
-            self.btn_iniciar.visible = True
-            self.btn_detener.visible = False
-            self.estado_icon.color = ft.Colors.GREY_400
-            self.estado_texto.value = "Escáner cerrado"
-            self.estado_subtexto.value = ""
+    def _ui_error_camara(self, mensaje: str):
+        self._scanning = False
+        self.estado_icon.color = ROJO
+        self.estado_texto.value = f"Error: {mensaje}"
+        self.estado_subtexto.value = "Verifica que la cámara esté conectada y libre"
+        self.btn_iniciar.visible = True
+        self.btn_detener.visible = False
+        try:
             self.page.update()
+        except Exception:
+            pass
 
     # ── Procesar QR escaneado ─────────────────────────────────────────────────
 
@@ -262,13 +282,39 @@ class ScannerView:
                 )
                 self._agregar_al_historial(nombre)
 
+                # Notificaciones en hilo separado (no bloquea el escáner)
+                attendance_id = resultado.get("attendanceId")
+                student_id = resultado.get("studentId")
+                if attendance_id and student_id:
+                    threading.Thread(
+                        target=self._enviar_notificaciones,
+                        args=(attendance_id, student_id, resultado),
+                        daemon=True,
+                    ).start()
+
         except Exception as ex:
             self._mostrar_resultado(
-                nombre="Error",
+                nombre="Error al registrar",
                 mensaje=str(ex),
                 color=ROJO,
                 icono=ft.Icons.ERROR_OUTLINE,
             )
+
+    def _enviar_notificaciones(self, attendance_id: str, student_id: str, resultado: dict):
+        try:
+            from app.services.convex_service import convex_action
+            convex_action("notifications:notifyGuardians", {
+                "attendanceId":   attendance_id,
+                "studentId":      student_id,
+                "studentName":    resultado.get("studentName", ""),
+                "studentGrade":   resultado.get("studentGrade", ""),
+                "studentGroup":   resultado.get("studentGroup", ""),
+                "attendanceDate": date.today().isoformat(),
+                "scannedAt":      int(time.time() * 1000),
+                "status":         "present",
+            })
+        except Exception as ex:
+            print(f"[notificaciones] error: {ex}")
 
     # ── UI: resultado del escaneo ─────────────────────────────────────────────
 
@@ -276,6 +322,7 @@ class ScannerView:
         self.resultado_card.bgcolor = color
         self.resultado_card.content = ft.Row(
             alignment=ft.MainAxisAlignment.CENTER,
+            spacing=12,
             controls=[
                 ft.Icon(icono, color=ft.Colors.WHITE, size=32),
                 ft.Column(
@@ -298,22 +345,20 @@ class ScannerView:
         )
         self.resultado_card.visible = True
         self.estado_subtexto.value = f"Último: {nombre}"
-        self.page.update()
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     # ── Historial del día ─────────────────────────────────────────────────────
 
     def _cargar_historial_hoy(self):
-        """Carga los registros de asistencia del día desde Convex."""
         self.historial.controls.clear()
         try:
-            from datetime import date
             hoy = date.today().isoformat()
             registros = convex_query(
                 "attendance:getByDate",
-                {
-                    "tokenHash": self.token_hash,
-                    "date": hoy,
-                }
+                {"tokenHash": self.token_hash, "date": hoy},
             )
             if not registros:
                 self.historial.controls.append(
@@ -326,17 +371,13 @@ class ScannerView:
                 )
             else:
                 for r in registros:
-                    self.historial.controls.append(
-                        self._fila_historial(r)
-                    )
+                    self.historial.controls.append(self._fila_historial(r))
         except Exception as ex:
             self.historial.controls.append(
                 ft.Text(f"Error cargando historial: {ex}", color=ROJO, size=12)
             )
 
     def _agregar_al_historial(self, nombre: str):
-        """Agrega una fila rápida al historial sin recargar todo."""
-        from datetime import datetime
         hora = datetime.now().strftime("%H:%M:%S")
         self.historial.controls.insert(
             0,
@@ -346,30 +387,24 @@ class ScannerView:
                 padding=ft.Padding(left=10, top=6, right=10, bottom=6),
                 content=ft.Row(
                     controls=[
-                        ft.Icon(
-                            ft.Icons.CHECK,
-                            color=ft.Colors.GREEN_600,
-                            size=16,
-                        ),
+                        ft.Icon(ft.Icons.CHECK, color=ft.Colors.GREEN_600, size=16),
                         ft.Text(
                             nombre,
                             size=13,
                             weight=ft.FontWeight.W_500,
                             expand=True,
                         ),
-                        ft.Text(
-                            hora,
-                            size=12,
-                            color=ft.Colors.GREY_500,
-                        ),
+                        ft.Text(hora, size=12, color=ft.Colors.GREY_500),
                     ],
                 ),
             ),
         )
-        self.page.update()
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     def _fila_historial(self, registro: dict) -> ft.Control:
-        from datetime import datetime
         ts = registro.get("scannedAt", 0)
         hora = datetime.fromtimestamp(ts / 1000).strftime("%H:%M:%S") if ts else ""
         nombre = registro.get("studentName", "Desconocido")

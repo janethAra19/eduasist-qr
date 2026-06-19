@@ -109,6 +109,32 @@ export const registerByQr = mutation({
     });
 
     const student = await ctx.db.get(qr.studentId);
-    return { alreadyRegistered: false, studentName: student?.name ?? "" };
+    return {
+      alreadyRegistered: false,
+      studentName:  student?.name  ?? "",
+      studentGrade: student?.grade ?? "",
+      studentGroup: student?.group ?? "",
+      studentId:    qr.studentId,
+      attendanceId: await ctx.db
+        .query("attendance")
+        .withIndex("by_student_date", (q) =>
+          q.eq("studentId", qr.studentId).eq("attendanceDate", today)
+        )
+        .first()
+        .then((r) => r?._id ?? null),
+    };
+  },
+});
+// ── Marca el status de notificación (usado desde la action) ──────────────────
+export const markNotified = mutation({
+  args: {
+    attendanceId: v.id("attendance"),
+    status: v.union(v.literal("sent"), v.literal("failed")),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.attendanceId, {
+      notificationStatus: args.status,
+    });
+    return { ok: true };
   },
 });

@@ -31,6 +31,8 @@ export default defineSchema({
     grade: v.string(),
     group: v.string(),
     photoUrl: v.optional(v.string()),
+    email: v.optional(v.string()),
+    passwordHash: v.optional(v.string()),
     status: v.union(
       v.literal("active"),
       v.literal("inactive"),
@@ -40,7 +42,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_school", ["schoolId"])
-    .index("by_school_grade_group", ["schoolId", "grade", "group"]),
+    .index("by_school_grade_group", ["schoolId", "grade", "group"])
+    .index("by_email", ["email"]),
 
   qrTokens: defineTable({
     schoolId: v.id("schools"),
@@ -98,4 +101,15 @@ export default defineSchema({
   })
     .index("by_token_hash", ["tokenHash"])
     .index("by_user", ["userId"]),
+
+  studentSessions: defineTable({
+    schoolId: v.id("schools"),
+    studentId: v.id("students"),
+    tokenHash: v.string(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_student", ["studentId"]),
 });

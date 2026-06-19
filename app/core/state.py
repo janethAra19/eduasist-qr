@@ -7,6 +7,7 @@ class AppState:
     role: str
     name: str
     token: str | None = None
+    email: str | None = None
 
 # Almacén simple en memoria
 _state = {}
@@ -18,7 +19,11 @@ def set_app_state(page, user_data: dict):
         role=user_data["role"],
         name=user_data["name"],
         token=user_data.get("token"),
+        email=user_data.get("email"),
     )
 
 def get_app_state(page):
     return _state.get("current", None)
+
+def clear_app_state():
+    _state.pop("current", None)

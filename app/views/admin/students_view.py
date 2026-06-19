@@ -352,11 +352,14 @@ class StudentsView:
             qr_img.save(buf, format="PNG")
             buf.seek(0)
 
-            os.makedirs("assets/qr", exist_ok=True)
-            qr_path = f"assets/qr/qr_{alumno['_id']}.png"
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            qr_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "..", "assets", "qr"))
+            os.makedirs(qr_dir, exist_ok=True)
+            qr_path = os.path.join(qr_dir, f"qr_{alumno['_id']}.png")
             with open(qr_path, "wb") as f:
                 f.write(buf.read())
 
+            # ✅ CORRECTO para Flet 0.85: usar page.show_dialog() y page.pop_dialog()
             dlg = ft.AlertDialog(
                 modal=True,
                 title=ft.Text(f"QR de {alumno['name']}",
@@ -365,16 +368,20 @@ class StudentsView:
                     tight=True,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
-                        ft.Image(src=qr_path, width=250, height=250, fit="contain"),
+                        ft.Image(src=qr_path, width=250, height=250,
+                                 fit="contain"),
                         ft.Text(f"Código: {alumno['studentCode']}",
                                 size=12, color=ft.Colors.GREY_600),
-                        ft.Text(f"Grado {alumno['grade']}° Grupo {alumno['group']}",
-                                size=12, color=ft.Colors.GREY_600),
+                        ft.Text(
+                            f"Grado {alumno['grade']}° Grupo {alumno['group']}",
+                            size=12, color=ft.Colors.GREY_600),
                     ],
                 ),
                 actions=[
-                    ft.TextButton("Cerrar",
-                        on_click=lambda e: self._cerrar_dialogo(dlg)),
+                    ft.TextButton(
+                        "Cerrar",
+                        on_click=lambda e: self.page.pop_dialog(),
+                    ),
                     ft.ElevatedButton(
                         "Imprimir",
                         icon=ft.Icons.PRINT,
@@ -382,33 +389,39 @@ class StudentsView:
                             bgcolor=AZUL_MARINO,
                             color=ft.Colors.WHITE,
                         ),
-                        on_click=lambda e: os.startfile(qr_path, "print"),
+                        on_click=lambda e: self._imprimir_qr(qr_path),
                     ),
                 ],
+                actions_alignment=ft.MainAxisAlignment.END,
             )
-            self.page.overlay.append(dlg)
-            dlg.open = True
-            self.page.update()
+            self.page.show_dialog(dlg)
 
         except Exception as ex:
             self._dialogo_error(str(ex))
 
-    def _cerrar_dialogo(self, dlg):
-        dlg.open = False
-        self.page.update()
+    def _imprimir_qr(self, qr_path):
+        try:
+            import subprocess, sys
+            if sys.platform == "win32":
+                os.startfile(qr_path, "print")
+            else:
+                subprocess.run(["lpr", qr_path])
+        except Exception as ex:
+            print(f"Error al imprimir: {ex}")
 
     def _dialogo_error(self, mensaje: str):
         dlg = ft.AlertDialog(
             title=ft.Text("Error", color=ROJO),
             content=ft.Text(mensaje),
             actions=[
-                ft.TextButton("Cerrar",
-                    on_click=lambda e: self._cerrar_dialogo(dlg))
+                ft.TextButton(
+                    "Cerrar",
+                    on_click=lambda e: self.page.pop_dialog(),
+                )
             ],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.page.overlay.append(dlg)
-        dlg.open = True
-        self.page.update()
+        self.page.show_dialog(dlg)
 
     def _abrir_explorador(self):
         root = tk.Tk()

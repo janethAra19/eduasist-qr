@@ -12,6 +12,7 @@ import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as schools from "../schools.js";
 import type * as sessions from "../sessions.js";
+import type * as studentSessions from "../studentSessions.js";
 import type * as students from "../students.js";
 import type * as users from "../users.js";
 
@@ -26,6 +27,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   schools: typeof schools;
   sessions: typeof sessions;
+  studentSessions: typeof studentSessions;
   students: typeof students;
   users: typeof users;
 }>;
