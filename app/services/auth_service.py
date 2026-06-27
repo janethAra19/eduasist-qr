@@ -78,7 +78,7 @@ def register(name: str, email: str, password: str, role: str, school_name: str =
 
 
 def register_student(name: str, email: str, password: str,
-                     grade: str, group: str, school_code: str):
+                     grade: str, group: str):
     """
     Registra un alumno nuevo con correo y contraseña.
     - Genera su perfil de alumno automáticamente
@@ -91,16 +91,12 @@ def register_student(name: str, email: str, password: str,
 
     password_hash = hash_password(password)
 
-    # Una sola mutación en Convex hace TODO:
-    # crea el estudiante + genera QR + lo vincula a la escuela
     result = convex_mutation("students:registerWithAccount", {
         "name":         name,
         "email":        email,
         "passwordHash": password_hash,
         "grade":        grade,
         "group":        group,
-        "schoolCode":   school_code.upper(),
     })
 
-    # result tiene: { _id, schoolId, name, email, role, qrToken, ... }
     return login(email, password)

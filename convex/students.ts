@@ -126,6 +126,20 @@ export const getQrToken = query({
   },
 });
 
+// ── Obtener QR de un alumno por su ID (sin sesión de admin) ──────────────────
+export const getQrByStudentId = query({
+  args: { studentId: v.id("students") },
+  handler: async (ctx, args) => {
+    const qr = await ctx.db
+      .query("qrTokens")
+      .withIndex("by_student_status", (q) =>
+        q.eq("studentId", args.studentId).eq("status", "active")
+      )
+      .first();
+    return qr ? qr.tokenHash : null;
+  },
+});
+
 export const getByQrToken = query({
   args: {
     qrTokenHash: v.string(),
@@ -182,65 +196,47 @@ export const getMyProfile = query({
       .query("schools")
       .withIndex("by_code", (q) => q.eq("code", args.schoolCode))
       .first();
-
     if (!school) throw new Error("Escuela no encontrada");
-
     const students = await ctx.db
       .query("students")
       .withIndex("by_school", (q) => q.eq("schoolId", school._id))
       .filter((q) => q.eq(q.field("studentCode"), args.studentCode))
       .collect();
-
     const student = students[0];
     if (!student) throw new Error("Alumno no encontrado");
-
     const qr = await ctx.db
       .query("qrTokens")
       .withIndex("by_student_status", (q) =>
         q.eq("studentId", student._id).eq("status", "active")
       )
       .first();
-
-    return {
-      ...student,
-      qrToken: qr?.tokenHash ?? null,
-    };
+    return { ...student, qrToken: qr?.tokenHash ?? null };
   },
 });
-// ── Auto-registro del alumno (sin sesión) ─────────────────────────────────────
-// El alumno llena nombre, grado, grupo y código de escuela.
-// Se crea el estudiante + QR automáticamente y aparece en el admin al instante.
+
 export const selfRegister = mutation({
   args: {
     schoolCode:  v.string(),
     name:        v.string(),
     grade:       v.string(),
     group:       v.string(),
-    studentCode: v.optional(v.string()), // si lo deja vacío se genera automático
+    studentCode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Buscar la escuela
     const school = await ctx.db
       .query("schools")
       .withIndex("by_code", (q) => q.eq("code", args.schoolCode.toUpperCase()))
       .first();
-    if (!school) throw new Error("Código de escuela no encontrado. Pídelo a tu administrador.");
-
+    if (!school) throw new Error("Código de escuela no encontrado.");
     const now = Date.now();
-
-    // Generar código único si no se proporcionó
     const studentCode = args.studentCode?.trim().toUpperCase() ||
       args.schoolCode.toUpperCase() + "-" + now.toString().slice(-5);
-
-    // Verificar que el código no esté duplicado en esa escuela
     const existing = await ctx.db
       .query("students")
       .withIndex("by_school", (q) => q.eq("schoolId", school._id))
       .filter((q) => q.eq(q.field("studentCode"), studentCode))
       .first();
-    if (existing) throw new Error("Ese código de alumno ya está registrado en esta escuela.");
-
-    // Crear alumno
+    if (existing) throw new Error("Ese código de alumno ya está registrado.");
     const studentId = await ctx.db.insert("students", {
       schoolId:    school._id,
       studentCode: studentCode,
@@ -251,8 +247,6 @@ export const selfRegister = mutation({
       createdAt:   now,
       updatedAt:   now,
     });
-
-    // Crear QR automáticamente
     const tokenHash = studentCode + "_" + now.toString();
     await ctx.db.insert("qrTokens", {
       schoolId:    school._id,
@@ -261,14 +255,6 @@ export const selfRegister = mutation({
       status:      "active",
       generatedAt: now,
     });
-
-    return {
-      studentId,
-      studentCode,
-      qrToken: tokenHash,
-      name:    args.name,
-      grade:   args.grade,
-      group:   args.group,
-    };
+    return { studentId, studentCode, qrToken: tokenHash, name: args.name, grade: args.grade, group: args.group };
   },
 });
